@@ -1,0 +1,376 @@
+#! /bin/sh
+# lms         Bring up/down Intel(R) Active Management Technology \
+#             Local Manageability Service
+# chkconfig: 35 20 80
+# description:  Bring up/down Intel(R) Active Management Technology \
+#               Local Manageability Service
+# Copyright(c) 2004 - 2017 Intel Corporation. All rights reserved.
+### BEGIN INIT INFO
+# Provides:       lms
+# Required-Start: $network $syslog $local_fs
+# Required-Stop:  $network $syslog $local_fs
+# Default-Start: 3 5
+# Default-Stop:
+# Short-Description: Intel(R) AMT Local Manageability Service
+# Description: Bring up/down Intel(R) Active Management Technology Local Manageability Service
+### END INIT INFO
+
+STARTSCRIPT=$0
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+DESC="LMS"
+NAME=lms
+prefix="@prefix@"
+exec_prefix="@exec_prefix@"
+sbindir="@sbindir@"
+sysconfdir="@sysconfdir@"
+localstatedir="@localstatedir@"
+DAEMON="@sbindir@/$NAME"
+EXECTBL_PATH=$DAEMON
+DAEMON_ARGS=""
+PIDFILE="@IATSTATERUNDIR@/$NAME.pid"
+LOCKFILE=/var/lock/subsys/$NAME
+STST_ARGS=""
+
+DIST="UNKNOWN"
+USER=`whoami`
+USERID=`id -u`
+CWD=`pwd`
+
+[ -x "$DAEMON" ] || exit 0
+[ -r /etc/default/$NAME ] && . /etc/default/$NAME
+[ -f /etc/default/rcS ] && . /etc/default/rcS
+
+my_check_pidfile() {
+	if [ -f $PIDFILE -a -r $PIDFILE ]; then
+		pid=`cat $PIDFILE`
+		if [ "X$pid" != "X" ]; then
+			if ! kill -0 $pid 2>/dev/null
+			then
+				rm -f $PIDFILE
+			fi
+		else
+			rm -f $PIDFILE
+		fi
+	fi
+	STST_ARGS=""
+	[ -f $PIDFILE ] && STST_ARGS=" -p $PIDFILE "
+}
+
+my_generic_failfunc() {
+	echo "  FAILED"
+}
+my_generic_successfunc() {
+	echo "  OK"
+}
+my_generic_startfunc() {
+	${EXECTBL_PATH} ${DAEMON_ARGS}
+	return $?
+}
+my_generic_stopfunc() {
+	if [ -f $PIDFILE ]; then
+		`kill ${MYSIGNAL} \`cat $PIDFILE \`  1>/dev/null 2>&1`
+	else
+		`kill ${MYSIGNAL} \`pidof -o $$ -o $PPID -o %PPID $DAEMON\`  1>/dev/null 2>&1`
+	fi
+}
+FAIL_FUNC=my_generic_failfunc
+SUCCESS_FUNC=my_generic_successfunc
+START_FUNC=my_generic_startfunc
+STOP_FUNC=my_generic_stopfunc
+
+if [ -f /etc/rc.d/init.d/functions ]; then
+	. /etc/rc.d/init.d/functions
+	DIST="RH"
+	my_rh_failfunc() {
+		failure $1
+		echo
+	}
+	my_rh_successfunc() {
+		success $1
+		echo
+	}
+	my_rh_startfunc() {
+		daemon ${STST_ARGS} ${EXECTBL_PATH} ${DAEMON_ARGS}
+		return $?
+	}
+	FAIL_FUNC=my_rh_failfunc
+	SUCCESS_FUNC=my_rh_successfunc
+	START_FUNC=my_rh_startfunc
+elif [ -f /etc/rc.status ]; then
+	. /etc/rc.status
+	DIST="SUSE"
+	my_suse_failfunc() {
+		echo $rc_failed
+	}
+	my_suse_successfunc() {
+		echo $rc_done
+	}
+	my_suse_startfunc() {
+		/sbin/startproc ${STST_ARGS} ${EXECTBL_PATH}
+		return $?
+	}
+	my_suse_stopfunc() {
+		/sbin/killproc ${STST_ARGS} ${MYSIGNAL} ${EXECTBL_PATH}
+	}
+	FAIL_FUNC=my_suse_failfunc
+	SUCCESS_FUNC=my_suse_successfunc
+	START_FUNC=my_suse_startfunc
+	STOP_FUNC=my_suse_stopfunc
+elif [ -f /lib/lsb/init-functions ]; then
+	. /lib/lsb/init-functions
+	if [ -f /etc/debian_version ]; then
+		DIST="Debian"
+		my_debian_failfunc() {
+			log_end_msg 1
+		}
+		my_debian_successfunc() {
+			log_end_msg 0
+		}
+		FAIL_FUNC=my_debian_failfunc
+		SUCCESS_FUNC=my_debian_successfunc
+	else
+		DIST="LSB"
+		MY_LSB_BEGIN_MSG="$DESC"
+		my_lsb_failfunc() {
+			log_failure_msg "$MY_LSB_BEGIN_MSG"
+		}
+		my_lsb_successfunc() {
+			log_success_msg "$MY_LSB_BEGIN_MSG"
+		}
+		my_lsb_startfunc() {
+			start_daemon ${STST_ARGS} ${EXECTBL_PATH} ${DAEMON_ARGS}
+			return $?
+		}
+		FAIL_FUNC=my_lsb_failfunc
+		SUCCESS_FUNC=my_lsb_successfunc
+		START_FUNC=my_lsb_startfunc
+	fi
+fi
+
+
+
+RET=0
+
+myaction_success() {
+	if [ "$RET" -eq 0 ]; then
+		$SUCCESS_FUNC $1
+	else
+		$FAIL_FUNC $1
+	fi
+}
+
+my_failure_msg() {
+	if [ "x$DIST" = "xDebian" ]; then
+		log_failure_msg "$1"
+	elif [ "x$DIST" = "xLSB" ]; then
+		log_failure_msg "$1"
+	else
+		echo " $1"
+	fi
+}
+
+my_begin_msg() {
+	if [ "x$DIST" = "xDebian" ]; then
+		log_begin_msg "$1"
+	elif [ "x$DIST" = "xLSB" ]; then
+		MY_LSB_BEGIN_MSG="$1"
+	else
+		echo -n "$1"
+	fi
+}
+
+check_running() {
+	PIDEXISTS=`ls $PIDFILE  2>/dev/null | wc -l`
+	if [ "$PIDEXISTS" -eq 1 ]; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+check_user() {
+	if [ "x$USERID" != "x0" ]; then
+		my_failure_msg "Error: You must have root privileges to $1 $DESC"
+		exit 1
+	fi
+}
+
+my_debian_start() {
+	MYSSD_XARGS=""
+	[ -f $PIDFILE ] && MYSSD_XARGS="--pidfile $PIDFILE"
+	/sbin/start-stop-daemon --start --quiet $MYSSD_XARGS --exec $DAEMON --test > /dev/null \
+		|| return 1
+	/sbin/start-stop-daemon --start --quiet $MYSSD_XARGS --exec $DAEMON -- \
+		$DAEMON_ARGS \
+		|| return 2
+	return 0
+}
+
+start() {
+	check_user   "start"
+	my_check_pidfile
+	my_begin_msg "Starting $DESC"
+
+	if [ "x$DIST" = "xDebian" ]; then
+		my_debian_start
+		case "$?" in
+			0|1) RET=0 ;;
+			2)   RET=2 ;;
+		esac
+	else
+		check_running
+		if [ "$?" -eq 0 ]; then
+			RET=0
+		else
+			$START_FUNC
+			RET=$?
+			if [ "x$DIST" = "xRH" ]; then
+				[ "$RET" = 0 ] && touch $LOCKFILE
+			fi
+		fi
+	fi
+
+	myaction_success "start"
+}
+
+my_stopprocsignal() {
+	MYSIGNAL=$1
+	w_tout=$2
+
+	$STOP_FUNC
+
+	i=0
+	while [ $i -lt $w_tout ] ; do
+		i=$(($i+1))
+		sleep 1
+		check_running
+		if [ "$?" -ne 0 ]; then
+			return 0
+		fi
+	done
+	return 2
+}
+
+my_generic_stop() {
+	MY_GS_RET=1
+	check_running
+	if [ "$?" -eq 0 ]; then
+		my_stopprocsignal -TERM 30
+		MY_GS_RET=$?
+		if [ "$MY_GS_RET" -ne 0 ]; then
+			my_stopprocsignal -KILL 5
+			MY_GS_RET=$?
+		fi
+	fi
+	return $MY_GS_RET
+}
+
+my_debian_stop() {
+	if [ -f $PIDFILE ]; then
+		/sbin/start-stop-daemon --stop --quiet --oknodo --retry=TERM/30/KILL/5 --pidfile=$PIDFILE --exec $DAEMON --
+		[ "$?" -eq 2 ] && return 2
+	else
+		/sbin/start-stop-daemon --stop --quiet --oknodo --retry=TERM/30/KILL/5 --exec $DAEMON --
+		[ "$?" -eq 2 ] && return 2
+	fi
+	return 0
+}
+
+stop() {
+	check_user   "stop"
+	my_check_pidfile
+	my_begin_msg "Stopping $DESC"
+
+	if [ "x$DIST" = "xDebian" ]; then
+		my_debian_stop
+		RET=$?
+	else
+		my_generic_stop
+		RET=$?
+		if [ "x$DIST" = "xRH" ]; then
+			[ "$RET" = 0 ] && rm -f $LOCKFILE
+		fi
+	fi
+
+	if [ -f $PIDFILE ]; then
+		check_running
+		if [ "$?" -ne 0 ]; then
+			rm -f $PIDFILE
+		fi
+	fi
+
+	myaction_success "stop"
+}
+
+my_debian_restart() {
+	my_begin_msg "Restarting $DESC"
+	my_debian_stop
+	RET=$?
+	if [ "$RET" -ne 2 ]; then
+		my_debian_start
+		RET=$?
+	fi
+	myaction_success "restart"
+}
+
+my_status() {
+	if [ "x$DIST" = "xRH" ]; then
+		status "${EXECTBL_PATH}"
+		RET=$?
+	else
+		check_running
+		RET=$?
+		if [ "$RET" -eq 0 ]; then
+			echo "$DESC is running"
+		else
+			echo "$DESC is NOT running"
+		fi
+	fi
+}
+
+my_print_usage() {
+	if [ "x$DIST" = "xDebian" ]; then
+		echo "Usage: $0 {start|stop|restart|force-reload|status}" >&2
+	else
+		echo "Usage: $0 {start|stop|restart|reload|status}"
+	fi
+	RET=3
+}
+
+# See how we were called.
+case "$1" in
+	start)
+		start
+		;;
+	stop)
+		stop
+		;;
+	reload)
+		check_user   "reload"
+		if [ "x$DIST" = "xDebian" ]; then
+			my_print_usage
+		else
+			$0 stop
+			sleep 1
+			$0 start
+		fi
+		;;
+	restart|force-reload)
+		check_user   "restart"
+		if [ "x$DIST" = "xDebian" ]; then
+			my_debian_restart
+		else
+			$0 stop
+			sleep 1
+			$0 start
+		fi
+		;;
+	status)
+		my_status
+		;;
+	*)
+		my_print_usage
+		;;
+esac
+
+exit $RET

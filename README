@@ -1,0 +1,57 @@
+//----------------------------------------------------------------------------
+//  Copyright (C) Intel Corporation, 2004 - 2017.
+//
+//  File:       README 
+//
+//  Contents:   a short description for developers
+//
+//----------------------------------------------------------------------------
+
+Local Manageability Service
+===========================
+
+The Local Manageability Service (LMS) allows applications to access the Intel(R) 
+Active Management Technology (Intel(R) AMT) FW via the local Intel(R) Management Engine Interface (Intel(R) MEI).
+
+The LMS is dependent on the Intel(R) MEI driver. Verify that the Intel(R) MEI driver is installed and is connected to the FW prior to installing the LMS. To verify that the Intel(R) MEI is installed use the lsmod command.
+
+The LMS runs as a daemon. Messages from the service are
+sent to the syslog. LMS messages are marked with a source of "LMS".
+
+Building and installing the LMS:
+--------------------------------
+To build and install the LMS, call "./configure" with no arguments. Next, call "make install". 
+To start the LMS use "service lms start".
+To ensure that the LMS will load upon startup, use "chkconfig --level 35 lms on" command to activate the service in specific runlevels.
+
+Uninstalling the LMS:
+---------------------
+Use "chkconfig --del lms" to remove LMS from all runlevels.
+Stop the service by using "service lms stop", and then call "make uninstall".
+
+Accessing The Intel AMT Device Via The LMS:
+-------------------------------------------
+Once the LMS is running, it listens for incoming connection requests on the following ports:
+Port 16992 for soap and WS-Management requests.
+Port 623 for WS-Management requests. 
+If secure connection with the Intel AMT device is enabled (TLS), LMS also listens on these ports:
+Port 16993 for secure soap and WS-Management requests.
+Port 664 for secure WS-Management requests.
+Each connection request is passed via the Intel(R) MEI driver to the Intel AMT device, but only if the source IP address belongs to the local machine. 
+
+To connect to the Intel AMT FW via the LMS, applications can use one of the following addresses:
+Host IP address
+Intel AMT IP address - Only if it is identical to the host's IP address
+Host name of the host
+Host name of Intel AMT - May be identical to or different from the host's host name
+IP address of 127.0.0.1 (IPv4) 
+IP address of ::1 (IPv6).
+localhost
+
+Examples:
+	http://127.0.0.1:16992
+	http://[::1]:16992	
+	https://desktop:16993
+
+When the FW uses a dedicated host name or domain name (i.e. different than the one used by the host), the LMS detects this and updates the hosts file to indicate that the FW host name is an alias of 127.0.0.1 and ::1 if IPv6 is enabled. The host file can be found under the etc folder (/etc/hosts).
+
