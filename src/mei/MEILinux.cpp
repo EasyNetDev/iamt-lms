@@ -130,7 +130,7 @@ bool MEILinux::Init(unsigned char reqProtocolVersion)
 		Deinit();
 	}
 
-	_fd = open("/dev/mei", O_RDWR);
+	_fd = open("/dev/mei0", O_RDWR);
 
 	if (_fd == -1 ) {
 		if (_verbose) {
